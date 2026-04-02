@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --border: #222222;
+    --on: #00ff87;
+    --on-dim: #00ff8722;
+    --on-glow: #00ff8755;
+    --off: #ff3b3b;
+    --off-dim: #ff3b3b22;
+    --off-glow: #ff3b3b55;
+    --text: #ffffff;
+    --muted: #555555;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* Ambient glow that changes color */
+  .ambient {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.15;
+    pointer-events: none;
+    transition: background 1s ease;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .ambient.is-on  { background: var(--on); }
+  .ambient.is-off { background: var(--off); }
+
+  .card {
+    position: relative;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 52px 48px 44px;
+    width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    box-shadow: 0 0 0 1px #ffffff08, 0 40px 80px #00000080;
+    animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .label-top {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 44px;
+    text-align: center;
+  }
+
+  /* Big toggle button */
+  .toggle-btn {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .toggle-btn.is-on {
+    background: var(--on-dim);
+    box-shadow:
+      0 0 0 1px var(--on-glow),
+      0 0 40px var(--on-glow),
+      0 0 80px var(--on-dim),
+      inset 0 0 20px var(--on-dim);
+  }
+
+  .toggle-btn.is-off {
+    background: var(--off-dim);
+    box-shadow:
+      0 0 0 1px var(--off-glow),
+      0 0 40px var(--off-glow),
+      0 0 80px var(--off-dim),
+      inset 0 0 20px var(--off-dim);
+  }
+
+  .toggle-btn:active {
+    transform: scale(0.94);
+  }
+
+  .toggle-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    animation: pulse 0.8s ease-in-out infinite alternate;
+  }
+
+  @keyframes pulse {
+    from { opacity: 0.4; }
+    to   { opacity: 0.8; }
+  }
+
+  .btn-icon {
+    font-size: 36px;
+    line-height: 1;
+    transition: all 0.3s ease;
+  }
+
+  .btn-label {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    transition: color 0.4s ease;
+  }
+
+  .toggle-btn.is-on  .btn-label { color: var(--on); }
+  .toggle-btn.is-off .btn-label { color: var(--off); }
+
+  /* Status indicator */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 32px;
+    margin-bottom: 4px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+    flex-shrink: 0;
+  }
+
+  .status-dot.is-on {
+    background: var(--on);
+    box-shadow: 0 0 8px var(--on);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  .status-dot.is-off {
+    background: var(--off);
+    box-shadow: 0 0 8px var(--off);
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  .status-text {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: color 0.4s ease;
+  }
+
+  .status-text.is-on  { color: var(--on); }
+  .status-text.is-off { color: var(--off); }
+
+  /* Log */
+  .log {
+    margin-top: 28px;
+    width: 100%;
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    min-height: 36px;
+    transition: color 0.3s ease;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .log.success { color: var(--on); }
+  .log.error   { color: var(--off); }
+  .log.loading { color: #888; }
+
+  /* Divider */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin: 28px 0 0;
+  }
+
+  .footer {
+    margin-top: 16px;
+    font-size: 9px;
+    color: #2a2a2a;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient is-on" id="ambient"></div>
+
+<div class="card">
+  <div class="label-top">Automation Control</div>
+  <div class="title">مصعب الجبلي</div>
+  <div class="subtitle">Real Estate Bot · Dubai</div>
+
+  <button class="toggle-btn is-on" id="toggleBtn" onclick="toggle()">
+    <span class="btn-icon" id="btnIcon">⏻</span>
+    <span class="btn-label" id="btnLabel">ON</span>
+  </button>
+
+  <div class="status-row">
+    <div class="status-dot is-on" id="statusDot"></div>
+    <div class="status-text is-on" id="statusText">Bot is running</div>
+  </div>
+
+  <div class="log" id="log">Tap the button to toggle the bot</div>
+
+  <div class="divider"></div>
+  <div class="footer">n8n · hawiyat.org</div>
+</div>
+
+<script>
+  const N8N_BASE = 'https://plus-dev.hawiyat.org';
+  const WORKFLOW_ID = 'HqMLQ9fVfm9SuCoXN2zIB';
+  const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMjc2NjE5Yi0yYTI1LTRkODktODlhOS01ZmJjOTdiODZiY2QiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzc1MDk0NjM2fQ.3jyn-zdMUSc8n4Rg_7gLPHbczEXVdN9YcOOuoSfySG8';
+
+  // true = ON, false = OFF
+  let currentState = true;
+  let busy = false;
+
+  const btn       = document.getElementById('toggleBtn');
+  const btnLabel  = document.getElementById('btnLabel');
+  const btnIcon   = document.getElementById('btnIcon');
+  const statusDot = document.getElementById('statusDot');
+  const statusTxt = document.getElementById('statusText');
+  const log       = document.getElementById('log');
+  const ambient   = document.getElementById('ambient');
+
+  function setUI(state) {
+    currentState = state;
+    const isOn = state;
+
+    btn.className       = 'toggle-btn ' + (isOn ? 'is-on' : 'is-off');
+    btnLabel.textContent = isOn ? 'ON' : 'OFF';
+    btnIcon.textContent  = '⏻';
+
+    statusDot.className  = 'status-dot ' + (isOn ? 'is-on' : 'is-off');
+    statusTxt.className  = 'status-text ' + (isOn ? 'is-on' : 'is-off');
+    statusTxt.textContent = isOn ? 'Bot is running' : 'Bot is paused';
+
+    ambient.className = 'ambient ' + (isOn ? 'is-on' : 'is-off');
+  }
+
+  function setLog(msg, type = '') {
+    log.textContent = msg;
+    log.className = 'log ' + type;
+  }
+
+  async function toggle() {
+    if (busy) return;
+    busy = true;
+
+    const nextState = !currentState;
+    const action    = nextState ? 'activate' : 'deactivate';
+    const endpoint  = `${N8N_BASE}/api/v1/workflows/${WORKFLOW_ID}/${action}`;
+
+    btn.classList.add('loading');
+    setLog(nextState ? 'Activating bot...' : 'Pausing bot...', 'loading');
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'X-N8N-API-KEY': API_KEY,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        setUI(nextState);
+        setLog(
+          nextState
+            ? '✓ Bot activated successfully'
+            : '✓ Bot paused successfully',
+          'success'
+        );
+      } else {
+        const err = await res.text();
+        setLog('✗ Error ' + res.status + ': ' + err.substring(0, 60), 'error');
+      }
+    } catch (e) {
+      setLog('✗ Network error — check your connection', 'error');
+    }
+
+    btn.classList.remove('loading');
+    busy = false;
+  }
+
+  // Check current status on load
+  (async () => {
+    setLog('Checking bot status...', 'loading');
+    try {
+      const res = await fetch(`${N8N_BASE}/api/v1/workflows/${WORKFLOW_ID}`, {
+        headers: { 'X-N8N-API-KEY': API_KEY }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const isActive = data.active === true;
+        setUI(isActive);
+        setLog(isActive ? '✓ Bot is currently running' : '✓ Bot is currently paused', 'success');
+      } else {
+        setLog('Could not fetch status — tap to control anyway', '');
+      }
+    } catch(e) {
+      setLog('Could not fetch status — tap to control anyway', '');
+    }
+  })();
+</script>
+</body>
+</html>
